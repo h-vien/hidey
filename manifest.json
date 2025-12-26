@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Hidey - Auto Blur Messages",
+  "version": "1.0.0",
+  "description": "Protect your privacy by automatically blurring sensitive chat messages",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "dist/background/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "dist/content/blur-engine.js",
+        "dist/content/selector-detector.js",
+        "dist/content/drag-blur.js",
+        "dist/content/floating-button.js",
+        "dist/content/content.js"
+      ],
+      "css": ["styles/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html"
+ 
+  },
+  "commands": {
+    "toggle-blur": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+B",
+        "mac": "Command+B"
+      },
+      "description": "Toggle blur mode"
+    }
+  }
+}
+

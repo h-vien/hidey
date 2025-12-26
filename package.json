@@ -1,0 +1,17 @@
+{
+  "name": "hidey",
+  "version": "1.0.0",
+  "description": "Privacy-focused browser extension that automatically blurs sensitive chat messages",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "typescript": "^5.3.3"
+  },
+  "private": true,
+  "dependencies": {
+    "lucide": "^0.562.0"
+  }
+}
