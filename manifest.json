@@ -22,6 +22,7 @@
         "dist/content/blur-engine.js",
         "dist/content/selector-detector.js",
         "dist/content/drag-blur.js",
+        "dist/content/unblur-detector.js",
         "dist/content/floating-button.js",
         "dist/content/content.js"
       ],
@@ -29,9 +30,12 @@
       "run_at": "document_idle"
     }
   ],
+  "icons": {
+    "128": "icons/icon.png"
+  },
   "action": {
-    "default_popup": "popup/popup.html"
- 
+    "default_popup": "popup/popup.html",
+    "default_icon": "icons/icon.png"
   },
   "commands": {
     "toggle-blur": {

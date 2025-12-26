@@ -17,7 +17,6 @@ interface BlurRegion {
 interface SiteSettings {
   enabled: boolean;
   blurIntensity: number;
-  hoverToUnblur: boolean;
 }
 
 // Constants (scoped to avoid conflicts with background script)
@@ -30,7 +29,6 @@ class BlurEngine {
   private siteSettings: SiteSettings | null = null;
   private enabled: boolean = true;
   private blurIntensity: number = BLUR_ENGINE_DEFAULT_INTENSITY;
-  private hoverToUnblur: boolean = false;
   private debounceTimer: number | null = null;
 
   constructor() {
@@ -50,18 +48,8 @@ class BlurEngine {
           this.applyRegionBlur();
         }
       } else if (message.type === 'UPDATE_SETTINGS') {
-        const oldHoverToUnblur = this.hoverToUnblur;
         this.enabled = message.enabled !== false;
         this.blurIntensity = message.blurIntensity || BLUR_ENGINE_DEFAULT_INTENSITY;
-        this.hoverToUnblur = message.hoverToUnblur || false;
-        
-        // If hover-to-unblur setting changed, update all blurred elements
-        if (oldHoverToUnblur !== this.hoverToUnblur) {
-          document.querySelectorAll('[data-hidey-blur]').forEach(el => {
-            this.updateHoverToUnblur(el as HTMLElement);
-          });
-        }
-        
         this.applyBlur();
       } else if (message.type === 'TOGGLE_BLUR') {
         this.enabled = !this.enabled;
@@ -106,7 +94,6 @@ class BlurEngine {
       this.siteSettings = result.siteSettings?.[hostname] || null;
       this.enabled = result.globalEnabled !== false;
       this.blurIntensity = this.siteSettings?.blurIntensity || BLUR_ENGINE_DEFAULT_INTENSITY;
-      this.hoverToUnblur = this.siteSettings?.hoverToUnblur || false;
     } catch (error) {
       console.error('Hidey: Error loading state', error);
     }
@@ -270,45 +257,6 @@ class BlurEngine {
     // Handle elements that might override filter (like those with transform, will-change, etc.)
     // Force a reflow to ensure blur is applied
     void element.offsetHeight;
-    
-    // Always update hover-to-unblur functionality (even if element was already blurred)
-    this.updateHoverToUnblur(element);
-  }
-
-  private updateHoverToUnblur(element: HTMLElement) {
-    // Remove existing listeners first
-    if ((element as any).__hideyListenersAdded) {
-      const enterHandler = (element as any).__hideyMouseEnter;
-      const leaveHandler = (element as any).__hideyMouseLeave;
-      if (enterHandler) element.removeEventListener('mouseenter', enterHandler);
-      if (leaveHandler) element.removeEventListener('mouseleave', leaveHandler);
-      (element as any).__hideyListenersAdded = false;
-      delete (element as any).__hideyMouseEnter;
-      delete (element as any).__hideyMouseLeave;
-    }
-    
-    // Add hover to unblur if enabled
-    if (this.hoverToUnblur) {
-      try {
-        element.setAttribute('data-hidey-hover-unblur', 'true');
-        const mouseEnterHandler = () => {
-          element.style.setProperty('filter', 'blur(0px)', 'important');
-        };
-        const mouseLeaveHandler = () => {
-          element.style.setProperty('filter', `blur(${this.blurIntensity}px)`, 'important');
-        };
-        
-        element.addEventListener('mouseenter', mouseEnterHandler);
-        element.addEventListener('mouseleave', mouseLeaveHandler);
-        (element as any).__hideyListenersAdded = true;
-        (element as any).__hideyMouseEnter = mouseEnterHandler;
-        (element as any).__hideyMouseLeave = mouseLeaveHandler;
-      } catch (error) {
-        console.warn('Hidey: Could not add hover-to-unblur to element', error);
-      }
-    } else {
-      element.removeAttribute('data-hidey-hover-unblur');
-    }
   }
 
   private ensureBlurApplied(element: HTMLElement) {
@@ -363,16 +311,6 @@ class BlurEngine {
     }
     
     element.style.removeProperty('transition');
-    
-    // Remove hover listeners
-    if ((element as any).__hideyListenersAdded) {
-      const enterHandler = (element as any).__hideyMouseEnter;
-      const leaveHandler = (element as any).__hideyMouseLeave;
-      if (enterHandler) element.removeEventListener('mouseenter', enterHandler);
-      if (leaveHandler) element.removeEventListener('mouseleave', leaveHandler);
-      (element as any).__hideyListenersAdded = false;
-    }
-    
     // Stop watching for style changes
     if ((element as any).__hideyStyleObserver) {
       (element as any).__hideyStyleObserver.disconnect();
@@ -407,92 +345,19 @@ class BlurEngine {
         overlay = document.createElement('div');
         overlay.className = 'hidey-region-overlay';
         overlay.setAttribute('data-region-id', String(index));
+        overlay.setAttribute('title', 'Click to delete this blur region');
         document.body.appendChild(overlay);
       }
 
-      // Setup hover-to-unblur if enabled (only set up once per overlay)
-      if (this.hoverToUnblur && !overlay.hasAttribute('data-hover-setup')) {
-        overlay.setAttribute('data-hover-setup', 'true');
-        // Enable pointer events so hover works
-        overlay.style.pointerEvents = 'auto';
-        
-        // Use arrow function to access 'this' and get current blur intensity dynamically
-        overlay.addEventListener('mouseenter', () => {
-          overlay!.style.filter = 'blur(0px)';
-          overlay!.style.backdropFilter = 'blur(0px)';
-          overlay!.setAttribute('data-is-hovering', 'true');
-        });
-        overlay.addEventListener('mouseleave', () => {
-          overlay!.style.filter = `blur(${this.blurIntensity}px)`;
-          overlay!.style.backdropFilter = `blur(${this.blurIntensity}px)`;
-          overlay!.removeAttribute('data-is-hovering');
-        });
-        
-        // Forward clicks through to content below
-        // Use a more efficient approach: hide overlay briefly, get element, restore, then click
-        const forwardClick = (e: MouseEvent) => {
-          const x = e.clientX;
-          const y = e.clientY;
-          
-          // Temporarily hide overlay to get element below (using opacity for instant effect)
-          const originalOpacity = overlay!.style.opacity;
-          overlay!.style.opacity = '0';
-          overlay!.style.pointerEvents = 'none';
-          
-          // Use requestAnimationFrame to ensure the change takes effect
-          requestAnimationFrame(() => {
-            const elementBelow = document.elementFromPoint(x, y) as HTMLElement;
-            
-            // Restore overlay immediately
-            overlay!.style.opacity = originalOpacity || '';
-            overlay!.style.pointerEvents = 'auto';
-            
-            if (elementBelow && elementBelow !== overlay && !elementBelow.closest('.hidey-region-overlay')) {
-              // Create and dispatch click event on element below
-              const clickEvent = new MouseEvent(e.type, {
-                bubbles: true,
-                cancelable: true,
-                clientX: x,
-                clientY: y,
-                button: e.button,
-                buttons: e.buttons,
-                detail: e.detail,
-              });
-              elementBelow.dispatchEvent(clickEvent);
-            }
-          });
-        };
-        
-        // Forward pointer events
-        ['click', 'mousedown', 'mouseup', 'contextmenu'].forEach(eventType => {
-          overlay.addEventListener(eventType, forwardClick as EventListener, true);
-        });
-      } else if (!this.hoverToUnblur && overlay.hasAttribute('data-hover-setup')) {
-        // Remove hover setup if disabled
-        overlay.removeAttribute('data-hover-setup');
-        overlay.removeAttribute('data-is-hovering');
-        overlay.style.pointerEvents = 'none';
-      }
-
-      // Update overlay properties (but preserve hover state if hovering)
-      const isHovering = overlay.hasAttribute('data-is-hovering');
+      // Set pointer events to none by default (unblur-detector will enable when active)
+      overlay.style.pointerEvents = 'none';
+      
+      // Update overlay properties
       overlay.style.position = 'fixed';
       overlay.style.width = `${region.width}px`;
       overlay.style.height = `${region.height}px`;
-      
-      // Only update blur if not currently hovering (to preserve hover state)
-      if (!isHovering) {
-        overlay.style.filter = `blur(${this.blurIntensity}px)`;
-        overlay.style.backdropFilter = `blur(${this.blurIntensity}px)`;
-      }
-      
-      // Set pointer events based on hover-to-unblur setting
-      if (!this.hoverToUnblur) {
-        overlay.style.pointerEvents = 'none';
-      } else if (!overlay.hasAttribute('data-hover-setup')) {
-        // Will be set when hover setup is done
-        overlay.style.pointerEvents = 'auto';
-      }
+      overlay.style.filter = `blur(${this.blurIntensity}px)`;
+      overlay.style.backdropFilter = `blur(${this.blurIntensity}px)`;
       
       overlay.style.zIndex = '9999';
       overlay.style.backgroundColor = 'transparent';

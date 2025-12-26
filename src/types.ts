@@ -16,7 +16,6 @@ export interface BlurRegion {
 export interface SiteSettings {
   enabled: boolean;
   blurIntensity: number;
-  hoverToUnblur: boolean;
 }
 
 export interface ExtensionState {
@@ -30,6 +29,5 @@ export const DEFAULT_BLUR_INTENSITY = 8;
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   enabled: true,
   blurIntensity: DEFAULT_BLUR_INTENSITY,
-  hoverToUnblur: false,
 };
 

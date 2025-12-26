@@ -61,18 +61,6 @@ function setupEventListeners() {
     await loadState();
   });
 
-  // Hover to unblur checkbox
-  document.getElementById('hoverToUnblur').addEventListener('change', async (e) => {
-    const hostname = new URL(currentTab.url).hostname;
-    
-    await chrome.runtime.sendMessage({
-      type: 'UPDATE_SITE_SETTINGS',
-      hostname,
-      settings: { hoverToUnblur: e.target.checked },
-    });
-    
-    await loadState();
-  });
 }
 
 function updateUI() {
@@ -89,7 +77,6 @@ function updateUI() {
   
   document.getElementById('blurIntensity').value = siteSettings.blurIntensity || 8;
   document.getElementById('blurIntensityValue').textContent = `${siteSettings.blurIntensity || 8}px`;
-  document.getElementById('hoverToUnblur').checked = siteSettings.hoverToUnblur || false;
 
   // Update rules list
   updateRulesList();

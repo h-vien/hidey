@@ -118,6 +118,10 @@ class FloatingButton {
           <span class="hidey-action-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="m15 19-3 3-3-3"/><path d="m19 9 3 3-3 3"/><path d="M2 12h20"/><path d="m5 9-3 3 3 3"/><path d="m9 5 3-3 3 3"/></svg></span>
           <span class="hidey-action-label">Drag Blur</span>
         </button>
+        <button class="hidey-panel-action" data-action="clear-blur">
+          <span class="hidey-action-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eraser-icon lucide-eraser"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></span>
+          <span class="hidey-action-label">Clear Blur</span>
+        </button>
         <button class="hidey-panel-action" data-action="open-popup">
           <span class="hidey-action-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg></span>
           <span class="hidey-action-label">Settings</span>
@@ -255,25 +259,62 @@ class FloatingButton {
     // Update panel position relative to button
     if (this.panel && this.button) {
       const buttonRect = this.button.getBoundingClientRect();
-      const panelWidth = 200;
-      const panelHeight = 220;
+      const panelRect = this.panel.getBoundingClientRect();
+      const panelWidth = panelRect.width || 200;
+      const panelHeight = panelRect.height || 220;
+      const padding = 30;
       
-      // Position panel above button, or below if near top
-      let panelTop = buttonRect.top - panelHeight - 10;
+      // Try positioning above button first
+      let panelTop = buttonRect.top - panelHeight - padding;
       let panelLeft = buttonRect.left;
       
-      // Adjust if panel would go off screen
-      if (panelTop < 10) {
-        panelTop = buttonRect.bottom + 10;
+      // Check if panel would overflow at the top
+      if (panelTop < padding) {
+        // Try below button instead
+        panelTop = buttonRect.bottom + padding;
+        
+        // If it still overflows at bottom, position it at the top of viewport
+        if (panelTop + panelHeight > window.innerHeight - padding) {
+          panelTop = padding;
+        }
       }
       
-      if (panelLeft + panelWidth > window.innerWidth - 10) {
-        panelLeft = window.innerWidth - panelWidth - 10;
+      // Check if panel would overflow at the bottom
+      if (panelTop + panelHeight > window.innerHeight - padding) {
+        // Position above button
+        panelTop = buttonRect.top - panelHeight - padding;
+        
+        // If it still overflows at top, position it at the bottom of viewport
+        if (panelTop < padding) {
+          panelTop = window.innerHeight - panelHeight - padding;
+        }
       }
       
-      if (panelLeft < 10) {
-        panelLeft = 10;
+      // Check if panel would overflow on the right
+      if (panelLeft + panelWidth > window.innerWidth - padding) {
+        // Try positioning to the left of button
+        panelLeft = buttonRect.right - panelWidth;
+        
+        // If it still overflows, align to right edge
+        if (panelLeft < padding) {
+          panelLeft = window.innerWidth - panelWidth - padding;
+        }
       }
+      
+      // Check if panel would overflow on the left
+      if (panelLeft < padding) {
+        // Try positioning to the right of button
+        panelLeft = buttonRect.right + padding;
+        
+        // If it still overflows, align to left edge
+        if (panelLeft + panelWidth > window.innerWidth - padding) {
+          panelLeft = padding;
+        }
+      }
+      
+      // Ensure panel stays within viewport bounds
+      panelLeft = Math.max(padding, Math.min(panelLeft, window.innerWidth - panelWidth - padding));
+      panelTop = Math.max(padding, Math.min(panelTop, window.innerHeight - panelHeight - padding));
       
       this.panel.style.left = `${panelLeft}px`;
       this.panel.style.top = `${panelTop}px`;
@@ -355,6 +396,10 @@ class FloatingButton {
         
       case 'drag-blur':
         window.dispatchEvent(new CustomEvent('hidey-start-drag-blur'));
+        break;
+        
+      case 'clear-blur':
+        window.dispatchEvent(new CustomEvent('hidey-start-unblur-picker'));
         break;
         
       case 'open-popup':

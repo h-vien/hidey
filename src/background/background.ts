@@ -17,7 +17,6 @@ interface BlurRegion {
 interface SiteSettings {
   enabled: boolean;
   blurIntensity: number;
-  hoverToUnblur: boolean;
 }
 
 interface ExtensionState {
@@ -31,7 +30,6 @@ const DEFAULT_BLUR_INTENSITY = 8;
 const DEFAULT_SITE_SETTINGS: SiteSettings = {
   enabled: true,
   blurIntensity: DEFAULT_BLUR_INTENSITY,
-  hoverToUnblur: false,
 };
 
 // Initialize default state
@@ -69,8 +67,11 @@ chrome.commands.onCommand.addListener((command) => {
 // Handle messages from content scripts and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'ELEMENT_SELECTED') {
-    handleElementSelected(message.selector, message.url);
-    sendResponse({ success: true });
+    handleElementSelected(message.selector, message.url).then(() => sendResponse({ success: true }));
+    return true;
+  } else if (message.type === 'UNBLUR_ELEMENT') {
+    handleUnblurElement(message.selector, message.url).then(() => sendResponse({ success: true }));
+    return true;
   } else if (message.type === 'REGION_CREATED') {
     handleRegionCreated(message.region);
     sendResponse({ success: true });
@@ -100,6 +101,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   return true;
 });
+
+async function handleUnblurElement(selector: string, url: string) {
+  // Remove selector from rules for this URL
+  const result = await chrome.storage.sync.get(['rules']);
+  const rules: BlurRule[] = result.rules || [];
+  
+  const urlPattern = url.split('?')[0].split('#')[0] + '*';
+  
+  // Find rule for this URL pattern
+  const ruleIndex = rules.findIndex(r => {
+    try {
+      const pattern = new RegExp(r.urlPattern.replace(/\*/g, '.*'));
+      return pattern.test(url);
+    } catch {
+      return r.urlPattern === urlPattern;
+    }
+  });
+  
+  if (ruleIndex >= 0) {
+    const rule = rules[ruleIndex];
+    // Remove the selector from the rule
+    rule.selectors = rule.selectors.filter(s => s !== selector);
+    
+    // If no selectors left, remove the entire rule
+    if (rule.selectors.length === 0) {
+      rules.splice(ruleIndex, 1);
+    } else {
+      rules[ruleIndex] = rule;
+    }
+    
+    await chrome.storage.sync.set({ rules });
+    notifyContentScripts('UPDATE_RULES', { rules });
+  }
+}
 
 async function handleElementSelected(selector: string, url: string) {
   const urlPattern = getUrlPattern(url);
