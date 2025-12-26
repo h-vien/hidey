@@ -4,7 +4,10 @@
   "description": "Privacy-focused browser extension that automatically blurs sensitive chat messages",
   "scripts": {
     "build": "tsc",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "build:extension": "node scripts/build-extension.js",
+    "build:zip": "npm run build:extension && node scripts/create-zip.js",
+    "clean": "rm -rf build dist"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.268",

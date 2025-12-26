@@ -1,6 +1,10 @@
 node_modules/
 dist/
+build/
 *.log
 .DS_Store
 *.tsbuildinfo
+*.zip
+hidey-extension-*.zip
+hidey-extension-*
 
