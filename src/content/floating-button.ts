@@ -9,6 +9,7 @@ class FloatingButton {
   private hostname: string = '';
   private dragStartPosition = { x: 0, y: 0 };
   private hasDragged: boolean = false;
+  private globalEnabled: boolean = true;
 
   constructor() {
     this.hostname = window.location.hostname;
@@ -19,12 +20,19 @@ class FloatingButton {
     // Load saved position
     await this.loadPosition();
     
+    // Load global enabled state
+    await this.loadGlobalEnabled();
+    
     // Create button and panel
     this.createButton();
     this.createPanel();
     
     // Load position from storage
     this.applyPosition();
+    
+    // Update UI to reflect current state
+    this.updateButtonState();
+    this.updatePanelState();
     
     // Handle window resize
     window.addEventListener('resize', () => {
@@ -34,9 +42,25 @@ class FloatingButton {
     
     // Listen for storage changes
     chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName === 'sync' && changes.floatingButtonPositions) {
-        this.loadPosition();
-        this.applyPosition();
+      if (areaName === 'sync') {
+        if (changes.floatingButtonPositions) {
+          this.loadPosition();
+          this.applyPosition();
+        }
+        if (changes.globalEnabled) {
+          this.globalEnabled = changes.globalEnabled.newValue !== false;
+          this.updateButtonState();
+          this.updatePanelState();
+        }
+      }
+    });
+    
+    // Listen for messages from background script
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.type === 'UPDATE_SETTINGS' && message.enabled !== undefined) {
+        this.globalEnabled = message.enabled !== false;
+        this.updateButtonState();
+        this.updatePanelState();
       }
     });
   }
@@ -382,12 +406,71 @@ class FloatingButton {
     this.button.classList.remove('hidey-btn-active');
   }
 
+  private async loadGlobalEnabled() {
+    try {
+      const result = await chrome.storage.sync.get(['globalEnabled']);
+      this.globalEnabled = result.globalEnabled !== false;
+    } catch (error) {
+      console.error('Hidey: Error loading global enabled state', error);
+      this.globalEnabled = true;
+    }
+  }
+
+  private updateButtonState() {
+    if (!this.button) return;
+    
+    if (this.globalEnabled) {
+      this.button.classList.remove('hidey-btn-disabled');
+      this.button.setAttribute('title', 'Hidey - Blur enabled');
+    } else {
+      this.button.classList.add('hidey-btn-disabled');
+      this.button.setAttribute('title', 'Hidey - Blur disabled');
+    }
+  }
+
+  private updatePanelState() {
+    if (!this.panel) return;
+    
+    const toggleButton = this.panel.querySelector('[data-action="toggle-blur"]') as HTMLElement;
+    if (toggleButton) {
+      if (this.globalEnabled) {
+        const label = toggleButton.querySelector('.hidey-action-label');
+        if (label) {
+          // Update the icon as well as label
+          const iconSpan = toggleButton.querySelector('.hidey-action-icon');
+          if (iconSpan) {
+            // Set icon to 'eye-off' when blur is enabled (to indicate disable)
+            iconSpan.innerHTML = `
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye-off-icon lucide-eye-off"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>
+            `;
+          }
+          label.textContent = 'Disable Blur';
+        }
+      } else {
+        const label = toggleButton.querySelector('.hidey-action-label');
+        if (label) {
+          const iconSpan = toggleButton.querySelector('.hidey-action-icon');
+          if (iconSpan) {
+            // Set icon to 'eye' when blur is disabled (to indicate enable)
+            iconSpan.innerHTML = `
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye-icon lucide-eye"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+            `;
+          }
+          label.textContent = 'Enable Blur';
+        }
+      }
+    }
+  }
+
   private handleAction(action: string) {
     switch (action) {
       case 'toggle-blur':
-        chrome.runtime.sendMessage({ type: 'TOGGLE_BLUR' });
-        // Also send to content script
-        window.dispatchEvent(new CustomEvent('hidey-toggle-blur'));
+        // Toggle global enabled state
+        const newState = !this.globalEnabled;
+        chrome.runtime.sendMessage({
+          type: 'TOGGLE_GLOBAL',
+          enabled: newState,
+        });
         break;
         
       case 'click-blur':

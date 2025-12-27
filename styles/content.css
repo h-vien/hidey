@@ -4,7 +4,8 @@
 }
 
 /* Ensure blur cannot be overridden */
-[data-hidey-blur] {
+/* But allow JavaScript to remove it on hover */
+[data-hidey-blur]:not([data-hidey-hovering]) {
   filter: blur(var(--hidey-blur-intensity, 8px)) !important;
 }
 
@@ -50,6 +51,11 @@
 
 .hidey-floating-btn.hidey-btn-active {
   background: rgba(76, 175, 80, 0.9);
+}
+
+.hidey-floating-btn.hidey-btn-disabled {
+  background: rgba(158, 158, 158, 0.7);
+  opacity: 0.7;
 }
 
 .hidey-floating-btn svg {
@@ -158,6 +164,17 @@
 
 .hidey-panel-action:active {
   transform: translateX(2px) scale(0.98);
+}
+
+.hidey-panel-action.hidey-action-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hidey-panel-action.hidey-action-disabled:hover {
+  background: #f5f5f5;
+  color: #333;
+  transform: none;
 }
 
 .hidey-action-icon {

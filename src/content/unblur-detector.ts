@@ -151,34 +151,35 @@ class UnblurDetector {
 
     // If element is blurred, unblur it; otherwise just complete the action
     if (target.hasAttribute('data-hidey-blur')) {
-      // Find all selectors that match this element from the current rules
-      this.findMatchingSelectors(target).then((matchingSelectors) => {
-        if (matchingSelectors.length > 0) {
-          // Send unblur request for each matching selector
-          matchingSelectors.forEach(selector => {
-            chrome.runtime.sendMessage({
-              type: 'UNBLUR_ELEMENT',
-              selector: selector,
-              url: window.location.href,
-            });
-          });
-        } else {
-          // Fallback: generate selector and try to remove it
-          const selector = this.generateSelector(target);
+    // Find all selectors that match this element from the current rules
+    this.findMatchingSelectors(target).then((matchingSelectors) => {
+      if (matchingSelectors.length > 0) {
+        // Send unblur request for each matching selector
+        // The background script will check if it's a default rule and prevent clearing
+        matchingSelectors.forEach(selector => {
           chrome.runtime.sendMessage({
             type: 'UNBLUR_ELEMENT',
             selector: selector,
             url: window.location.href,
           });
-        }
-        
-        // Stop picker mode after processing
-        this.stop();
-      }).catch((error) => {
-        console.error('Hidey: Error finding matching selectors', error);
-        // Stop picker mode even on error
-        this.stop();
-      });
+        });
+      } else {
+        // Fallback: generate selector and try to remove it
+        const selector = this.generateSelector(target);
+        chrome.runtime.sendMessage({
+          type: 'UNBLUR_ELEMENT',
+          selector: selector,
+          url: window.location.href,
+        });
+      }
+      
+      // Stop picker mode after processing
+      this.stop();
+    }).catch((error) => {
+      console.error('Hidey: Error finding matching selectors', error);
+      // Stop picker mode even on error
+      this.stop();
+    });
     } else {
       // Element is not blurred, just complete the action (do nothing)
       this.stop();

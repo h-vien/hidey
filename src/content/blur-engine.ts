@@ -40,6 +40,15 @@ class BlurEngine {
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.type === 'UPDATE_RULES') {
         this.currentRules = message.rules || [];
+        // Clear any hovering state before applying blur to ensure elements that were cleared stay cleared
+        document.querySelectorAll('[data-hidey-hovering]').forEach(el => {
+          const element = el as HTMLElement;
+          // Only restore blur if element still has data-hidey-blur attribute
+          if (element.hasAttribute('data-hidey-blur')) {
+            element.style.setProperty('filter', `blur(${this.blurIntensity}px)`, 'important');
+          }
+          element.removeAttribute('data-hidey-hovering');
+        });
         this.applyBlur();
       } else if (message.type === 'UPDATE_REGIONS') {
         this.currentRegions = message.regions || [];
@@ -48,11 +57,27 @@ class BlurEngine {
           this.applyRegionBlur();
         }
       } else if (message.type === 'UPDATE_SETTINGS') {
+        const oldBlurIntensity = this.blurIntensity;
         this.enabled = message.enabled !== false;
         this.blurIntensity = message.blurIntensity || BLUR_ENGINE_DEFAULT_INTENSITY;
+        
+        // If blur intensity changed, update all blurred elements and restore hover state
+        if (oldBlurIntensity !== this.blurIntensity) {
+          document.querySelectorAll('[data-hidey-blur]').forEach(el => { 
+            const element = el as HTMLElement;
+            const isHovering = element.hasAttribute('data-hidey-hovering');
+            if (!isHovering) {
+              element.style.setProperty('filter', `blur(${this.blurIntensity}px)`, 'important');
+            }
+          });
+        }
+        
         this.applyBlur();
       } else if (message.type === 'TOGGLE_BLUR') {
+        // This is for local toggle (deprecated, use UPDATE_SETTINGS instead)
         this.enabled = !this.enabled;
+        // Upload (persist) the current globalEnabled state to chrome.storage.sync
+        chrome.storage.sync.set({ globalEnabled: this.enabled });
         this.applyBlur();
       }
       return true;
@@ -118,7 +143,25 @@ class BlurEngine {
       this.observer.disconnect();
     }
 
-    this.observer = new MutationObserver(() => {
+    this.observer = new MutationObserver((mutations) => {
+      // Only process if there are actual relevant changes
+      const hasRelevantChanges = mutations.some(mutation => {
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          return true;
+        }
+        if (mutation.type === 'attributes' && 
+            (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
+          // Only care about changes to elements that might match our selectors
+          const target = mutation.target as HTMLElement;
+          return !target.hasAttribute('data-hidey-blur');
+        }
+        return false;
+      });
+
+      if (!hasRelevantChanges) {
+        return;
+      }
+
       // Debounce DOM changes
       if (this.debounceTimer) {
         clearTimeout(this.debounceTimer);
@@ -130,7 +173,7 @@ class BlurEngine {
         if (this.enabled) {
           this.applySelectorBlur();
         }
-      }, 100);
+      }, 20); // Increased debounce time for better performance
     });
 
     this.observer.observe(document.body, {
@@ -185,6 +228,7 @@ class BlurEngine {
 
   private applyBlur() {
     if (!this.enabled) {
+      console.log('removeAllBlur')
       this.removeAllBlur();
       return;
     }
@@ -199,123 +243,142 @@ class BlurEngine {
   private applySelectorBlur() {
     // Track elements that should be blurred
     const elementsToBlur = new Set<HTMLElement>();
+    const currentUrl = window.location.href
+    // Collect all elements that match rules (batch querySelectorAll calls)
+    const matchRule = this.currentRules.find(rule => this.urlMatchesPattern(currentUrl, rule.urlPattern));
 
-    // Collect all elements that match rules
-    this.currentRules.forEach(rule => {
-      rule.selectors.forEach(selector => {
-        try {
-          const elements = document.querySelectorAll(selector);
-          elements.forEach(el => {
-            elementsToBlur.add(el as HTMLElement);
-          });
-        } catch (error) {
-          console.warn(`Hidey: Invalid selector "${selector}"`, error);
-        }
+    if (matchRule) {
+      matchRule.selectors.forEach(selector => {
+        const elements = document.querySelectorAll(selector);
+        this.applyBlurInBatches(Array.from(elements) as HTMLElement[]);
       });
-    });
+    }
 
-    // Remove blur from elements that no longer match
-    document.querySelectorAll('[data-hidey-blur]').forEach(el => {
-      const element = el as HTMLElement;
-      if (!elementsToBlur.has(element)) {
-        this.removeBlurFromElement(element);
+  }
+
+  private applyBlurInBatches(elements: HTMLElement[]) {
+    const batchSize = 50; // Process 50 elements per frame
+    let index = 0;
+
+    const processBatch = () => {
+      const end = Math.min(index + batchSize, elements.length);
+      
+      for (let i = index; i < end; i++) {
+        this.applyBlurToElement(elements[i]);
       }
-    });
+      
+      index = end;
+      
+      if (index < elements.length) {
+        requestAnimationFrame(processBatch);
+      }
+    };
 
-    // Apply blur to all matching elements
-    elementsToBlur.forEach(element => {
-      this.applyBlurToElement(element);
-    });
+    if (elements.length > 0) {
+      requestAnimationFrame(processBatch);
+    }
   }
 
   private applyBlurToElement(element: HTMLElement) {
     const isAlreadyBlurred = element.hasAttribute('data-hidey-blur');
+    const isHovering = element.hasAttribute('data-hidey-hovering');
     
-    console.log(element,'element')
-    if (!isAlreadyBlurred) {
+    if (!isAlreadyBlurred && !isHovering) {
       // First time applying blur
       element.setAttribute('data-hidey-blur', 'selector');
       element.classList.add('hidey-blurred');
       
-      // Store original filter if it exists
-      const originalFilter = element.style.filter || window.getComputedStyle(element).filter;
-      if (originalFilter && originalFilter !== 'none' && !element.hasAttribute('data-hidey-original-filter')) {
-        element.setAttribute('data-hidey-original-filter', originalFilter);
-      }
-      
-      // Watch for style changes that might remove blur
-      this.watchElementForBlurRemoval(element);
-    } else {
+      // Apply blur style immediately
+      element.style.setProperty('filter', `blur(${this.blurIntensity}px)`, 'important');
+      element.style.setProperty('transition', 'filter 0.2s ease', 'important');
+    } else if (isAlreadyBlurred && !isHovering) {
       // Re-apply blur in case it was removed by other code
       this.ensureBlurApplied(element);
     }
     
-    // Always update blur intensity and transition (in case intensity changed)
-    element.style.setProperty('filter', `blur(${this.blurIntensity}px)`, 'important');
-    element.style.setProperty('transition', 'filter 0.2s ease', 'important');
-    
-    // Handle elements that might override filter (like those with transform, will-change, etc.)
-    // Force a reflow to ensure blur is applied
-    void element.offsetHeight;
+    // Add hover-to-unblur functionality (only if not already set up)
+    if (!(element as any).__hideyHoverListeners) {
+      this.setupHoverToUnblur(element);
+    }
+  }
+
+  private setupHoverToUnblur(element: HTMLElement) {
+    // Remove existing listeners if any
+    if ((element as any).__hideyHoverListeners) {
+      const { enterHandler, leaveHandler } = (element as any).__hideyHoverListeners;
+      element.removeEventListener('mouseenter', enterHandler);
+      element.removeEventListener('mouseleave', leaveHandler);
+    }
+
+    const mouseEnterHandler = () => {
+      // Temporarily remove blur when entering this element or any child
+      // mouseenter automatically handles parent-child relationships
+      element.style.setProperty('filter', 'none', 'important');
+      element.setAttribute('data-hidey-hovering', 'true');
+    };
+
+    const mouseLeaveHandler = (e: MouseEvent) => {
+      const relatedTarget = e.relatedTarget as HTMLElement | null;
+      
+      // Check if element still has blur attribute (might have been cleared)
+      if (!element.hasAttribute('data-hidey-blur')) {
+        // Element was cleared, don't restore blur
+        element.removeAttribute('data-hidey-hovering');
+        return;
+      }
+      
+      // Check if we're moving to a child element within this blurred element
+      if (relatedTarget && element.contains(relatedTarget)) {
+        // Still inside the blurred element (moving to a child), keep unblurred
+        return;
+      }
+      
+      // Truly leaving the blurred element, restore blur only if still blurred
+      if (element.hasAttribute('data-hidey-blur')) {
+        element.style.setProperty('filter', `blur(${this.blurIntensity}px)`, 'important');
+      }
+      element.removeAttribute('data-hidey-hovering');
+    };
+
+    // mouseenter/mouseleave automatically handle parent-child relationships correctly
+    // They fire when entering/leaving the element OR any of its descendants
+    element.addEventListener('mouseenter', mouseEnterHandler);
+    element.addEventListener('mouseleave', mouseLeaveHandler);
+
+    // Store handlers for cleanup
+    (element as any).__hideyHoverListeners = {
+      enterHandler: mouseEnterHandler,
+      leaveHandler: mouseLeaveHandler,
+    };
   }
 
   private ensureBlurApplied(element: HTMLElement) {
-    const currentFilter = window.getComputedStyle(element).filter;
-    const expectedBlur = `blur(${this.blurIntensity}px)`;
+    const isHovering = element.hasAttribute('data-hidey-hovering');
+    if (isHovering) {
+      return;
+    }
     
-    // Check if blur is still applied
-    if (!currentFilter.includes('blur')) {
-      element.style.setProperty('filter', expectedBlur, 'important');
-      void element.offsetHeight; // Force reflow
+    // Check if blur is still applied (only check computed style if needed)
+    const currentFilter = element.style.filter;
+    if (!currentFilter || !currentFilter.includes('blur')) {
+      element.style.setProperty('filter', `blur(${this.blurIntensity}px)`, 'important');
     }
   }
 
   private watchElementForBlurRemoval(element: HTMLElement) {
-    // Use MutationObserver to watch for style attribute changes
-    if ((element as any).__hideyStyleObserver) {
-      return; // Already watching
-    }
-
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-          // Check if blur was removed
-          const currentFilter = window.getComputedStyle(element).filter;
-          if (!currentFilter.includes('blur')) {
-            // Re-apply blur
-            element.style.setProperty('filter', `blur(${this.blurIntensity}px)`, 'important');
-          }
-        }
-      });
-    });
-
-    observer.observe(element, {
-      attributes: true,
-      attributeFilter: ['style'],
-    });
-
-    (element as any).__hideyStyleObserver = observer;
+    // Skip per-element observers for performance
+    // The main MutationObserver will handle style changes globally
+    // This reduces the number of observers from N (one per element) to 1
   }
 
   private removeBlurFromElement(element: HTMLElement) {
     element.removeAttribute('data-hidey-blur');
     element.classList.remove('hidey-blurred');
     
-    // Restore original filter if it existed
-    const originalFilter = element.getAttribute('data-hidey-original-filter');
-    if (originalFilter) {
-      element.style.setProperty('filter', originalFilter, 'important');
-      element.removeAttribute('data-hidey-original-filter');
-    } else {
-      element.style.removeProperty('filter');
-    }
+    // Simply remove the filter property (we don't need to restore original filter)
+    element.style.removeProperty('filter');
     
     element.style.removeProperty('transition');
-    // Stop watching for style changes
-    if ((element as any).__hideyStyleObserver) {
-      (element as any).__hideyStyleObserver.disconnect();
-      delete (element as any).__hideyStyleObserver;
-    }
   }
 
   private applyRegionBlur() {
@@ -385,6 +448,20 @@ class BlurEngine {
       element.removeAttribute('data-hidey-blur');
       element.classList.remove('hidey-blurred');
       element.style.filter = '';
+    });
+
+      // Collect all elements that match rules
+    this.currentRules.forEach(rule => {
+      rule.selectors.forEach(selector => {
+        try {
+          const elements = document.querySelectorAll(selector);
+          elements.forEach(el => {
+            this.removeBlurFromElement(el as HTMLElement);
+          });
+        } catch (error) {
+          console.warn(`Hidey: Invalid selector "${selector}"`, error);
+        }
+      });
     });
     
     document.querySelectorAll('.hidey-region-overlay').forEach(el => el.remove());

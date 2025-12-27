@@ -36,9 +36,30 @@ const DEFAULT_SITE_SETTINGS: SiteSettings = {
 chrome.runtime.onInstalled.addListener(async () => {
   const result = await chrome.storage.sync.get(['rules', 'regions', 'siteSettings', 'globalEnabled']);
   
-  if (!result.rules) {
-    await chrome.storage.sync.set({ rules: getDefaultRules() });
-  }
+  // Always ensure default rules exist (merge with existing rules)
+  const defaultRules = getDefaultRules();
+  console.log(defaultRules,'defaultRules')
+  const existingRules = result.rules || [];
+  
+  // Merge default rules with existing rules (don't overwrite user's custom rules)
+  defaultRules.forEach(defaultRule => {
+    const existingRuleIndex = existingRules.findIndex((r: BlurRule) => r.urlPattern === defaultRule.urlPattern);
+    if (existingRuleIndex >= 0) {
+      // Merge selectors if rule exists
+      const existingRule = existingRules[existingRuleIndex];
+      defaultRule.selectors.forEach(selector => {
+        if (!existingRule.selectors.includes(selector)) {
+          existingRule.selectors.push(selector);
+        }
+      });
+      existingRules[existingRuleIndex] = existingRule;
+    } else {
+      // Add new default rule
+      existingRules.push(defaultRule);
+    }
+  });
+  
+  await chrome.storage.sync.set({ rules: existingRules });
   
   if (!result.regions) {
     await chrome.storage.sync.set({ regions: [] });
@@ -103,11 +124,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function handleUnblurElement(selector: string, url: string) {
-  // Remove selector from rules for this URL
+  // Check if this selector is from a default rule - if so, don't allow clearing
+  const defaultRules = getDefaultRules();
+  const urlPattern = url.split('?')[0].split('#')[0] + '*';
+  
+  // Check if selector is in any default rule for this URL
+  const isDefaultSelector = defaultRules.some(rule => {
+    try {
+      const pattern = new RegExp(rule.urlPattern.replace(/\*/g, '.*'));
+      if (pattern.test(url)) {
+        return rule.selectors.includes(selector);
+      }
+    } catch {
+      return rule.urlPattern === urlPattern && rule.selectors.includes(selector);
+    }
+    return false;
+  });
+  
+  if (isDefaultSelector) {
+    // Don't allow clearing default rule selectors
+    console.log('Hidey: Cannot clear blur for default rule selector:', selector);
+    return;
+  }
+  
+  // Remove selector from rules for this URL (only for user-added rules)
   const result = await chrome.storage.sync.get(['rules']);
   const rules: BlurRule[] = result.rules || [];
-  
-  const urlPattern = url.split('?')[0].split('#')[0] + '*';
   
   // Find rule for this URL pattern
   const ruleIndex = rules.findIndex(r => {
@@ -306,27 +348,39 @@ function getDefaultRules(): BlurRule[] {
     {
       urlPattern: 'https://chat.zalo.me/*',
       selectors: [
-        '.message-text',
-        '.message-content',
-        '[data-message-content]',
+        '[data-component="bubble-message"]',
+        '.zavatar',
+        '.threadChat__title',
+        '[data-id="div_TabMsg_ThrdChItem"]',
       ],
       enabled: true,
     },
     {
-      urlPattern: 'https://web.telegram.org/*',
+      urlPattern: 'https://www.facebook.com/messages/*',
       selectors: [
-        '.message',
-        '.text-content',
-        '[data-message-text]',
+        '.html-div.x1qjc9v5.x9f619.x78zum5.xdt5ytf.x1iyjqo2.xl56j7k.xeuugli.xifccgj.x4cne27.xw01apr.x1ws5yxj.xbktkl8.x1tr5nd9.x3su7b9.x12pbpz1.x1gtkyd9.x1r8uycs',
+        '.html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x6ikm8r.x10wlt62',
+        '.x9f619.x1n2onr6.x1ja2u2z.x78zum5.xdt5ytf.x193iq5w.xeuugli.x1r8uery.xs83m0k.x1icxu4v.x10b6aqq.x1yrsyyn.x1iyjqo2.xyiysdx',
+        '.x1n2onr6.x1ja2u2z.x78zum5.xdt5ytf.x193iq5w.xeuugli.x1r8uery.xs83m0k.x1icxu4v.x10b6aqq.x1yrsyyn.x1iyjqo2.xyiysdx',
+        '.html-div.x1qjc9v5.x1q0q8m5.x1qhh985.x18b5jzi.x10w94by.x1t7ytsu.x14e42zd.x13fuv20.x972fbf.x1ey2m1c.x9f619.x78zum5.xdt5ytf.x1iyjqo2.xs83m0k.xtijo5x.x1o0tod.x1qughib.xat24cr.x14z9mp.x1lziwak.xdj266r.x2lwn1j.xeuugli.x18d9i69.xyri2b.x1c1uobl.xexx8yu.x10l6tqk.x13vifvy.x1ja2u2z',
+        '.x1rg5ohu.x1n2onr6.x3ajldb.x1ja2u2z',
+        '.html-h2.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x1vvkbs.x1heor9g.x1qlqyl8.x1pd3egz.x1a2a7pz.x193iq5w.xeuugli',
+        '.x1rg5ohu.x5yr21d.xl1xv1r.xh8yej3',
       ],
       enabled: true,
     },
     {
       urlPattern: 'https://www.messenger.com/*',
       selectors: [
-        '[data-testid*="message"]',
-        '.message',
-        '.text-content',
+        '.html-div.x1qjc9v5.x9f619.x78zum5.xdt5ytf.x1iyjqo2.xl56j7k.xeuugli.xifccgj.x4cne27.xw01apr.x1ws5yxj.xbktkl8.x1tr5nd9.x3su7b9.x12pbpz1.x1gtkyd9.x1r8uycs',
+        '.html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x6ikm8r.x10wlt62',
+        '.x9f619.x1n2onr6.x1ja2u2z.x78zum5.xdt5ytf.x193iq5w.xeuugli.x1r8uery.xs83m0k.x1icxu4v.x10b6aqq.x1yrsyyn.x1iyjqo2.xyiysdx',
+        '.x1n2onr6.x1ja2u2z.x78zum5.xdt5ytf.x193iq5w.xeuugli.x1r8uery.xs83m0k.x1icxu4v.x10b6aqq.x1yrsyyn.x1iyjqo2.xyiysdx',
+        '.html-div.x1qjc9v5.x1q0q8m5.x1qhh985.x18b5jzi.x10w94by.x1t7ytsu.x14e42zd.x13fuv20.x972fbf.x1ey2m1c.x9f619.x78zum5.xdt5ytf.x1iyjqo2.xs83m0k.xtijo5x.x1o0tod.x1qughib.xat24cr.x14z9mp.x1lziwak.xdj266r.x2lwn1j.xeuugli.x18d9i69.xyri2b.x1c1uobl.xexx8yu.x10l6tqk.x13vifvy.x1ja2u2z',
+        '.x1rg5ohu.x1n2onr6.x3ajldb.x1ja2u2z',
+        '.x1rg5ohu.x5yr21d.xl1xv1r.xh8yej3',
+        '.x1qjc9v5.x9f619.x78zum5.xdl72j9.xdt5ytf.x2lwn1j.xeuugli.x1n2onr6.x1ja2u2z.x1es9f29.x1fy70ro.x1vu7fv8.xuna32c.x1iyjqo2.xs83m0k',
+        '.html-h2.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x1vvkbs.x1heor9g.x1qlqyl8.x1pd3egz.x1a2a7pz.x193iq5w.xeuugli',
       ],
       enabled: true,
     },
