@@ -23,6 +23,9 @@ class UnblurDetector {
     this.isActive = true;
     document.body.style.cursor = 'crosshair';
     
+    // Dispatch event to notify blur engine that clear blur mode is active
+    window.dispatchEvent(new CustomEvent('hidey-clear-blur-mode-started'));
+    
     // Create highlight overlay
     this.highlightOverlay = document.createElement('div');
     this.highlightOverlay.style.position = 'absolute';
@@ -51,6 +54,9 @@ class UnblurDetector {
 
     this.isActive = false;
     document.body.style.cursor = '';
+    
+    // Dispatch event to notify blur engine that clear blur mode is stopped
+    window.dispatchEvent(new CustomEvent('hidey-clear-blur-mode-stopped'));
     
     if (this.highlightOverlay) {
       this.highlightOverlay.remove();

@@ -30,6 +30,7 @@ class BlurEngine {
   private enabled: boolean = true;
   private blurIntensity: number = BLUR_ENGINE_DEFAULT_INTENSITY;
   private debounceTimer: number | null = null;
+  private isClearBlurModeActive: boolean = false;
 
   constructor() {
     this.init();
@@ -50,7 +51,13 @@ class BlurEngine {
           element.removeAttribute('data-hidey-hovering');
         });
         this.applyBlur();
-      } else if (message.type === 'UPDATE_REGIONS') {
+
+      }
+      else if (message.type === 'UNBLUR_ELEMENT') {
+        this.removeBlurFromElement(document.querySelector(message.selector) as HTMLElement);
+        this.applyBlur();
+      }
+      else if (message.type === 'UPDATE_REGIONS') {
         this.currentRegions = message.regions || [];
         // Only recreate regions when they change, not full blur
         if (this.enabled) {
@@ -87,6 +94,15 @@ class BlurEngine {
     window.addEventListener('hidey-toggle-blur', () => {
       this.enabled = !this.enabled;
       this.applyBlur();
+    });
+    
+    // Listen for clear blur mode events
+    window.addEventListener('hidey-clear-blur-mode-started', () => {
+      this.isClearBlurModeActive = true;
+    });
+    
+    window.addEventListener('hidey-clear-blur-mode-stopped', () => {
+      this.isClearBlurModeActive = false;
     });
     
     // Load initial state
@@ -173,7 +189,7 @@ class BlurEngine {
         if (this.enabled) {
           this.applySelectorBlur();
         }
-      }, 20); // Increased debounce time for better performance
+      }, 100); // Increased debounce time for better performance
     });
 
     this.observer.observe(document.body, {
@@ -228,7 +244,6 @@ class BlurEngine {
 
   private applyBlur() {
     if (!this.enabled) {
-      console.log('removeAllBlur')
       this.removeAllBlur();
       return;
     }
@@ -246,7 +261,6 @@ class BlurEngine {
     const currentUrl = window.location.href
     // Collect all elements that match rules (batch querySelectorAll calls)
     const matchRule = this.currentRules.find(rule => this.urlMatchesPattern(currentUrl, rule.urlPattern));
-
     if (matchRule) {
       matchRule.selectors.forEach(selector => {
         const elements = document.querySelectorAll(selector);
@@ -311,6 +325,12 @@ class BlurEngine {
     }
 
     const mouseEnterHandler = () => {
+      // Don't add hover state if clear blur mode is active
+      if (this.isClearBlurModeActive) {
+        element.setAttribute('data-hidey-clear-blur-mode-hovering', 'true');
+        return;
+      }
+      
       // Temporarily remove blur when entering this element or any child
       // mouseenter automatically handles parent-child relationships
       element.style.setProperty('filter', 'none', 'important');
@@ -319,6 +339,10 @@ class BlurEngine {
 
     const mouseLeaveHandler = (e: MouseEvent) => {
       const relatedTarget = e.relatedTarget as HTMLElement | null;
+      if(element.hasAttribute('data-hidey-clear-blur-mode-hovering')) {
+        element.removeAttribute('data-hidey-clear-blur-mode-hovering');
+        return;
+      } 
       
       // Check if element still has blur attribute (might have been cleared)
       if (!element.hasAttribute('data-hidey-blur')) {
@@ -376,7 +400,7 @@ class BlurEngine {
     element.classList.remove('hidey-blurred');
     
     // Simply remove the filter property (we don't need to restore original filter)
-    element.style.removeProperty('filter');
+    element.style.setProperty('filter', 'none', 'important');
     
     element.style.removeProperty('transition');
   }

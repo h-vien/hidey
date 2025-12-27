@@ -38,7 +38,6 @@ chrome.runtime.onInstalled.addListener(async () => {
   
   // Always ensure default rules exist (merge with existing rules)
   const defaultRules = getDefaultRules();
-  console.log(defaultRules,'defaultRules')
   const existingRules = result.rules || [];
   
   // Merge default rules with existing rules (don't overwrite user's custom rules)
@@ -91,7 +90,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleElementSelected(message.selector, message.url).then(() => sendResponse({ success: true }));
     return true;
   } else if (message.type === 'UNBLUR_ELEMENT') {
-    handleUnblurElement(message.selector, message.url).then(() => sendResponse({ success: true }));
+    handleUnblurElement(message.selector, message.url).then(() => sendResponse({ 
+
+     }));
     return true;
   } else if (message.type === 'REGION_CREATED') {
     handleRegionCreated(message.region);
@@ -176,6 +177,7 @@ async function handleUnblurElement(selector: string, url: string) {
     await chrome.storage.sync.set({ rules });
     notifyContentScripts('UPDATE_RULES', { rules });
   }
+  notifyContentScripts('UNBLUR_ELEMENT', { selector, url, rules });
 }
 
 async function handleElementSelected(selector: string, url: string) {
