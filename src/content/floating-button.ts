@@ -32,7 +32,6 @@ class FloatingButton {
     
     // Update UI to reflect current state
     this.updateButtonState();
-    this.updatePanelState();
     
     // Handle window resize
     window.addEventListener('resize', () => {
@@ -50,7 +49,6 @@ class FloatingButton {
         if (changes.globalEnabled) {
           this.globalEnabled = changes.globalEnabled.newValue !== false;
           this.updateButtonState();
-          this.updatePanelState();
         }
       }
     });
@@ -60,7 +58,6 @@ class FloatingButton {
       if (message.type === 'UPDATE_SETTINGS' && message.enabled !== undefined) {
         this.globalEnabled = message.enabled !== false;
         this.updateButtonState();
-        this.updatePanelState();
       }
     });
   }
@@ -130,10 +127,6 @@ class FloatingButton {
         <button class="hidey-panel-close" aria-label="Close">×</button>
       </div>
       <div class="hidey-panel-content">
-        <button class="hidey-panel-action" data-action="toggle-blur">
-          <span class="hidey-action-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg></span>
-          <span class="hidey-action-label">Toggle Blur</span>
-        </button>
         <button class="hidey-panel-action" data-action="click-blur">
           <span class="hidey-action-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4.1 12 6"/><path d="m5.1 8-2.9-.8"/><path d="m6 12-1.9 2"/><path d="M7.2 2.2 8 5.1"/><path d="M9.037 9.69a.498.498 0 0 1 .653-.653l11 4.5a.5.5 0 0 1-.074.949l-4.349 1.041a1 1 0 0 0-.74.739l-1.04 4.35a.5.5 0 0 1-.95.074z"/></svg></span>
           <span class="hidey-action-label">Click to Blur</span>
@@ -146,9 +139,9 @@ class FloatingButton {
           <span class="hidey-action-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eraser-icon lucide-eraser"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></span>
           <span class="hidey-action-label">Clear Blur</span>
         </button>
-        <button class="hidey-panel-action" data-action="open-popup">
-          <span class="hidey-action-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg></span>
-          <span class="hidey-action-label">Settings</span>
+        <button class="hidey-panel-action hidey-panel-action-coffee" data-action="buy-coffee">
+          <span class="hidey-action-icon"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="8"/><line x1="10" x2="10" y1="2" y2="8"/><line x1="14" x2="14" y1="2" y2="8"/></svg></span>
+          <span class="hidey-action-label">Buy me a coffee</span>
         </button>
       </div>
     `;
@@ -428,51 +421,9 @@ class FloatingButton {
     }
   }
 
-  private updatePanelState() {
-    if (!this.panel) return;
-    
-    const toggleButton = this.panel.querySelector('[data-action="toggle-blur"]') as HTMLElement;
-    if (toggleButton) {
-      if (this.globalEnabled) {
-        const label = toggleButton.querySelector('.hidey-action-label');
-        if (label) {
-          // Update the icon as well as label
-          const iconSpan = toggleButton.querySelector('.hidey-action-icon');
-          if (iconSpan) {
-            // Set icon to 'eye-off' when blur is enabled (to indicate disable)
-            iconSpan.innerHTML = `
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye-off-icon lucide-eye-off"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></svg>
-            `;
-          }
-          label.textContent = 'Disable Blur';
-        }
-      } else {
-        const label = toggleButton.querySelector('.hidey-action-label');
-        if (label) {
-          const iconSpan = toggleButton.querySelector('.hidey-action-icon');
-          if (iconSpan) {
-            // Set icon to 'eye' when blur is disabled (to indicate enable)
-            iconSpan.innerHTML = `
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-eye-icon lucide-eye"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
-            `;
-          }
-          label.textContent = 'Enable Blur';
-        }
-      }
-    }
-  }
 
   private handleAction(action: string) {
     switch (action) {
-      case 'toggle-blur':
-        // Toggle global enabled state
-        const newState = !this.globalEnabled;
-        chrome.runtime.sendMessage({
-          type: 'TOGGLE_GLOBAL',
-          enabled: newState,
-        });
-        break;
-        
       case 'click-blur':
         window.dispatchEvent(new CustomEvent('hidey-start-element-picker'));
         break;
@@ -488,6 +439,11 @@ class FloatingButton {
       case 'open-popup':
         // Open extension popup (this will be handled by background script if needed)
         chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
+        break;
+        
+      case 'buy-coffee':
+        // Open Buy Me a Coffee page
+        window.open('https://qr.sepay.vn/img?bank=Techcombank&acc=VIEN02&template=compact&amount=&des=', '_blank');
         break;
     }
   }
