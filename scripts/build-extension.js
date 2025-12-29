@@ -65,6 +65,7 @@ function build() {
     'content/blur-engine.js',
     'content/selector-detector.js',
     'content/drag-blur.js',
+    'content/unblur-detector.js',
     'content/floating-button.js',
     'content/content.js'
   ];
@@ -92,6 +93,7 @@ function build() {
     'blur-engine.js',
     'selector-detector.js',
     'drag-blur.js',
+    'unblur-detector.js',
     'floating-button.js',
     'content.js'
   ];

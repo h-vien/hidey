@@ -21,7 +21,7 @@ body {
 /* Header */
 header {
   padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #667eea;
   color: white;
 }
 
@@ -366,4 +366,19 @@ h2 {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
+}
+
+.feedback-link {
+  display: block;
+  text-align: center;
+  color: #667eea;
+  text-decoration: none;
+  font-size: 13px;
+  margin-top: 12px;
+  transition: color 0.2s;
+}
+
+.feedback-link:hover {
+  color: #5568d3;
+  text-decoration: underline;
 }
