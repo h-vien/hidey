@@ -1,4 +1,11 @@
 class DragBlur {
+  // Selector escaping utility function (scoped to this class)
+  private static escapeSelector(identifier: string): string {
+    if (typeof CSS !== 'undefined' && CSS.escape) {
+      return CSS.escape(identifier);
+    }
+    return identifier.replace(/([!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~])/g, '\\$1');
+  }
   private isActive: boolean = false;
   private startX: number = 0;
   private startY: number = 0;
@@ -189,7 +196,8 @@ class DragBlur {
 
   private generateContainerSelector(element: HTMLElement): string {
     if (element.id) {
-      return `#${element.id}`;
+      const escapedId = DragBlur.escapeSelector(element.id);
+      return `#${escapedId}`;
     }
     
     if (element.className && typeof element.className === 'string') {
@@ -197,7 +205,7 @@ class DragBlur {
         .split(' ')
         .filter(c => c.length > 0)
         .slice(0, 2)
-        .map(c => `.${c}`)
+        .map(c => `.${DragBlur.escapeSelector(c)}`)
         .join('');
       
       if (classes) {

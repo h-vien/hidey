@@ -1,4 +1,21 @@
 class SelectorDetector {
+  // Selector escaping utility functions (scoped to this class)
+  private static escapeSelector(identifier: string): string {
+    if (typeof CSS !== 'undefined' && CSS.escape) {
+      return CSS.escape(identifier);
+    }
+    return identifier.replace(/([!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~])/g, '\\$1');
+  }
+
+  private static escapeAttributeValue(value: string): string {
+    if (value.includes('"')) {
+      return value.replace(/"/g, '\\"');
+    }
+    if (value.includes("'")) {
+      return value.replace(/'/g, "\\'");
+    }
+    return value;
+  }
   private isActive: boolean = false;
   private highlightOverlay: HTMLElement | null = null;
   private currentElement: HTMLElement | null = null;
@@ -133,7 +150,8 @@ class SelectorDetector {
   private generateSelector(element: HTMLElement): string {
     // Try ID first
     if (element.id) {
-      return `#${element.id}`;
+      const escapedId = SelectorDetector.escapeSelector(element.id);
+      return `#${escapedId}`;
     }
 
     // Try class combination
@@ -142,7 +160,7 @@ class SelectorDetector {
         .split(' ')
         .filter(c => c.length > 0)
         .slice(0, 3) // Limit to 3 classes
-        .map(c => `.${c}`)
+        .map(c => `.${SelectorDetector.escapeSelector(c)}`)
         .join('');
       
       if (classes) {
@@ -150,8 +168,12 @@ class SelectorDetector {
         const selector = `${tagName}${classes}`;
         
         // Check if selector is unique
-        if (document.querySelectorAll(selector).length === 1) {
-          return selector;
+        try {
+          if (document.querySelectorAll(selector).length === 1) {
+            return selector;
+          }
+        } catch (err) {
+          // Invalid selector, continue to next method
         }
       }
     }
@@ -160,9 +182,15 @@ class SelectorDetector {
     for (let i = 0; i < element.attributes.length; i++) {
       const attr = element.attributes[i];
       if (attr.name.startsWith('data-')) {
-        const selector = `[${attr.name}="${attr.value}"]`;
-        if (document.querySelectorAll(selector).length === 1) {
-          return selector;
+        const escapedName = SelectorDetector.escapeSelector(attr.name);
+        const escapedValue = SelectorDetector.escapeAttributeValue(attr.value);
+        const selector = `[${escapedName}="${escapedValue}"]`;
+        try {
+          if (document.querySelectorAll(selector).length === 1) {
+            return selector;
+          }
+        } catch (err) {
+          // Invalid selector, continue to next attribute
         }
       }
     }
@@ -175,7 +203,8 @@ class SelectorDetector {
       let selector = current.tagName.toLowerCase();
       
       if (current.id) {
-        selector += `#${current.id}`;
+        const escapedId = SelectorDetector.escapeSelector(current.id);
+        selector += `#${escapedId}`;
         path.unshift(selector);
         break;
       }
@@ -185,7 +214,7 @@ class SelectorDetector {
           .split(' ')
           .filter(c => c.length > 0)
           .slice(0, 1)
-          .map(c => `.${c}`)
+          .map(c => `.${SelectorDetector.escapeSelector(c)}`)
           .join('');
         if (classes) {
           selector += classes;

@@ -1,5 +1,22 @@
 // Unblur detector - allows clicking on blurred elements to remove blur
 class UnblurDetector {
+  // Selector escaping utility functions (scoped to this class)
+  private static escapeSelector(identifier: string): string {
+    if (typeof CSS !== 'undefined' && CSS.escape) {
+      return CSS.escape(identifier);
+    }
+    return identifier.replace(/([!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~])/g, '\\$1');
+  }
+
+  private static escapeAttributeValue(value: string): string {
+    if (value.includes('"')) {
+      return value.replace(/"/g, '\\"');
+    }
+    if (value.includes("'")) {
+      return value.replace(/'/g, "\\'");
+    }
+    return value;
+  }
   private isActive: boolean = false;
   private highlightOverlay: HTMLElement | null = null;
   private currentElement: HTMLElement | null = null;
@@ -230,7 +247,8 @@ class UnblurDetector {
   private generateSelector(element: HTMLElement): string {
     // Try ID first
     if (element.id) {
-      return `#${element.id}`;
+      const escapedId = UnblurDetector.escapeSelector(element.id);
+      return `#${escapedId}`;
     }
 
     // Try class names
@@ -239,7 +257,7 @@ class UnblurDetector {
         .split(' ')
         .filter(c => c.length > 0 && !c.includes('hidey'))
         .slice(0, 3)
-        .map(c => `.${c}`)
+        .map(c => `.${UnblurDetector.escapeSelector(c)}`)
         .join('');
       if (classes) {
         return classes;

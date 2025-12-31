@@ -263,8 +263,13 @@ class BlurEngine {
     const matchRule = this.currentRules.find(rule => this.urlMatchesPattern(currentUrl, rule.urlPattern));
     if (matchRule) {
       matchRule.selectors.forEach(selector => {
-        const elements = document.querySelectorAll(selector);
-        this.applyBlurInBatches(Array.from(elements) as HTMLElement[]);
+        try {
+          const elements = document.querySelectorAll(selector);
+          this.applyBlurInBatches(Array.from(elements) as HTMLElement[]);
+        } catch (err) {
+          // Invalid selector (e.g., contains unescaped special characters)
+          console.warn(`Hidey: Invalid selector "${selector}"`, err);
+        }
       });
     }
 
