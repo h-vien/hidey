@@ -131,13 +131,8 @@ async function handleUnblurElement(selector: string, url: string) {
   
   // Check if selector is in any default rule for this URL
   const isDefaultSelector = defaultRules.some(rule => {
-    try {
-      const pattern = new RegExp(rule.urlPattern.replace(/\*/g, '.*'));
-      if (pattern.test(url)) {
-        return rule.selectors.includes(selector);
-      }
-    } catch {
-      return rule.urlPattern === urlPattern && rule.selectors.includes(selector);
+    if (urlMatchesPattern(url, rule.urlPattern)) {
+      return rule.selectors.includes(selector);
     }
     return false;
   });
@@ -154,12 +149,7 @@ async function handleUnblurElement(selector: string, url: string) {
   
   // Find rule for this URL pattern
   const ruleIndex = rules.findIndex(r => {
-    try {
-      const pattern = new RegExp(r.urlPattern.replace(/\*/g, '.*'));
-      return pattern.test(url);
-    } catch {
-      return r.urlPattern === urlPattern;
-    }
+    return urlMatchesPattern(url, r.urlPattern);
   });
   
   if (ruleIndex >= 0) {
@@ -339,9 +329,58 @@ function notifyContentScripts(type: string, data: any) {
 function getUrlPattern(url: string): string {
   try {
     const urlObj = new URL(url);
-    return `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}*`;
+    // Normalize hostname: remove www. prefix to create pattern that matches both www and non-www
+    let hostname = urlObj.hostname;
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.substring(4);
+    }
+    return `${urlObj.protocol}//${hostname}${urlObj.pathname}*`;
   } catch {
     return url;
+  }
+}
+
+// Helper function to normalize hostname for matching (removes www. prefix)
+function normalizeHostnameForMatching(urlString: string): string {
+  try {
+    const urlObj = new URL(urlString);
+    let hostname = urlObj.hostname;
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.substring(4);
+    }
+    return urlString.replace(urlObj.hostname, hostname);
+  } catch {
+    return urlString;
+  }
+}
+
+// Helper function to check if URL matches pattern (handles www/non-www)
+function urlMatchesPattern(url: string, pattern: string): boolean {
+  try {
+    // Normalize both URL and pattern
+    const normalizedUrl = normalizeHostnameForMatching(url);
+    const normalizedPattern = normalizeHostnameForMatching(pattern);
+
+    // Convert URL pattern to regex
+    let regexPattern = normalizedPattern
+      .replace(/\./g, '\\.')
+      .replace(/\*/g, '.*')
+      .replace(/\?/g, '\\?');
+
+    // Make www. optional in the hostname part of the pattern
+    // This allows patterns to match both www and non-www versions
+    regexPattern = regexPattern.replace(
+      /(https?:\/\/)([^\/\*]+)/g,
+      (match, protocol, hostnamePart) => {
+        return `${protocol}(www\\.)?${hostnamePart}`;
+      }
+    );
+
+    const regex = new RegExp(`^${regexPattern}$`);
+    // Try matching both normalized and original URL
+    return regex.test(normalizedUrl) || regex.test(url);
+  } catch {
+    return false;
   }
 }
 
@@ -386,6 +425,16 @@ function getDefaultRules(): BlurRule[] {
       ],
       enabled: true,
     },
+    {
+      urlPattern: 'https://web.telegram.org/*',
+      selectors: [
+        '.chatlist-chat',
+        '.chat-info',
+        '.chat-message',
+        '.bubble-content-wrapper'
+      ],
+      enabled: true,
+    }
   ];
 }
 

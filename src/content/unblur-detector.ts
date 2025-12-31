@@ -220,9 +220,8 @@ class UnblurDetector {
     // Check each rule for the current URL
     rules.forEach((rule: any) => {
       try {
-        // Check if rule matches current URL
-        const pattern = new RegExp(rule.urlPattern.replace(/\*/g, '.*'));
-        if (pattern.test(currentUrl)) {
+        // Check if rule matches current URL (handles www/non-www)
+        if (this.urlMatchesPattern(currentUrl, rule.urlPattern)) {
           // Check each selector in the rule
           rule.selectors.forEach((selector: string) => {
             try {
@@ -242,6 +241,50 @@ class UnblurDetector {
     });
     
     return matchingSelectors;
+  }
+
+  private urlMatchesPattern(url: string, pattern: string): boolean {
+    try {
+      // Normalize hostnames to handle www/non-www variations
+      const normalizeHostname = (urlString: string): string => {
+        try {
+          const urlObj = new URL(urlString);
+          let hostname = urlObj.hostname;
+          // Remove www. prefix if present
+          if (hostname.startsWith('www.')) {
+            hostname = hostname.substring(4);
+          }
+          return urlString.replace(urlObj.hostname, hostname);
+        } catch {
+          return urlString;
+        }
+      };
+
+      // Normalize both URL and pattern for comparison (remove www. from both)
+      const normalizedUrl = normalizeHostname(url);
+      const normalizedPattern = normalizeHostname(pattern);
+
+      // Convert URL pattern to regex
+      let regexPattern = normalizedPattern
+        .replace(/\./g, '\\.')
+        .replace(/\*/g, '.*')
+        .replace(/\?/g, '\\?');
+
+      // Make www. optional in the hostname part of the pattern
+      // This allows patterns to match both www and non-www versions
+      regexPattern = regexPattern.replace(
+        /(https?:\/\/)([^\/\*]+)/g,
+        (match, protocol, hostnamePart) => {
+          return `${protocol}(www\\.)?${hostnamePart}`;
+        }
+      );
+
+      const regex = new RegExp(`^${regexPattern}$`);
+      // Try matching both normalized and original URL
+      return regex.test(normalizedUrl) || regex.test(url);
+    } catch {
+      return false;
+    }
   }
 
   private generateSelector(element: HTMLElement): string {

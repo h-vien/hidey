@@ -191,7 +191,12 @@ class DragBlur {
 
   private getUrlPattern(): string {
     const url = new URL(window.location.href);
-    return `${url.protocol}//${url.host}${url.pathname}*`;
+    // Normalize hostname: remove www. prefix to create pattern that matches both www and non-www
+    let hostname = url.hostname;
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.substring(4);
+    }
+    return `${url.protocol}//${hostname}${url.pathname}*`;
   }
 
   private generateContainerSelector(element: HTMLElement): string {

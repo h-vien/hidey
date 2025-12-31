@@ -142,13 +142,45 @@ class BlurEngine {
 
   private urlMatchesPattern(url: string, pattern: string): boolean {
     try {
+      // Normalize hostnames to handle www/non-www variations
+      const normalizeHostname = (urlString: string): string => {
+        try {
+          const urlObj = new URL(urlString);
+          let hostname = urlObj.hostname;
+          // Remove www. prefix if present
+          if (hostname.startsWith('www.')) {
+            hostname = hostname.substring(4);
+          }
+          // Replace hostname in URL with normalized version (without www)
+          return urlString.replace(urlObj.hostname, hostname);
+        } catch {
+          return urlString;
+        }
+      };
+
+      // Normalize both URL and pattern for comparison (remove www. from both)
+      const normalizedUrl = normalizeHostname(url);
+      const normalizedPattern = normalizeHostname(pattern);
+
       // Convert URL pattern to regex
-      const regexPattern = pattern
+      let regexPattern = normalizedPattern
         .replace(/\./g, '\\.')
         .replace(/\*/g, '.*')
         .replace(/\?/g, '\\?');
+
+      // Make www. optional in the hostname part of the pattern
+      // This allows patterns to match both www and non-www versions
+      regexPattern = regexPattern.replace(
+        /(https?:\/\/)([^\/\*]+)/g,
+        (match, protocol, hostnamePart) => {
+          // Make www. optional: (www\.)?domain.com
+          return `${protocol}(www\\.)?${hostnamePart}`;
+        }
+      );
+
       const regex = new RegExp(`^${regexPattern}$`);
-      return regex.test(url);
+      // Try matching both normalized and original URL
+      return regex.test(normalizedUrl) || regex.test(url);
     } catch {
       return false;
     }
