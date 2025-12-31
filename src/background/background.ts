@@ -14,9 +14,18 @@ interface BlurRegion {
   containerSelector?: string;
 }
 
+interface BlurGroupSelectors {
+  avatar: string[];
+  conversation: string[];
+  messages: string[];
+}
+
 interface SiteSettings {
-  enabled: boolean;
   blurIntensity: number;
+  blurAvatars?: boolean;
+  blurConversationList?: boolean;
+  blurMessages?: boolean;
+  selectors?: BlurGroupSelectors;
 }
 
 interface ExtensionState {
@@ -28,44 +37,131 @@ interface ExtensionState {
 
 const DEFAULT_BLUR_INTENSITY = 8;
 const DEFAULT_SITE_SETTINGS: SiteSettings = {
-  enabled: true,
   blurIntensity: DEFAULT_BLUR_INTENSITY,
+  blurAvatars: true,
+  blurConversationList: true,
+  blurMessages: true,
 };
+
+// Default selectors for each platform
+function getDefaultSelectors(hostname: string): BlurGroupSelectors {
+  // Normalize hostname (remove www.)
+  const normalizedHostname = hostname.startsWith('www.') ? hostname.substring(4) : hostname;
+  
+  const selectors: Record<string, BlurGroupSelectors> = {
+    'chat.zalo.me': {
+      avatar: ['.zavatar'],
+      conversation: ['[data-id="div_TabMsg_ThrdChItem"] .conv-item-title__name', '[data-id="div_TabMsg_ThrdChItem"] .conv-message'],
+      messages: ['[data-component="bubble-message"]', '.message-content', '.bubble-message', '.threadChat__title .header-title'],
+    },
+    'web.telegram.org': {
+      avatar: ['.avatar', '.avatar-like'],
+      conversation: ['.row-title-row.dialog-title', '.row-subtitle-row.dialog-subtitle'],
+      messages: ['.bubble-content-wrapper', '.chat-info .user-title'],
+    },
+    'messenger.com': {
+      avatar: [
+        '.html-div.x1qjc9v5.x1q0q8m5.x1qhh985.x18b5jzi.x10w94by.x1t7ytsu.x14e42zd.x13fuv20.x972fbf.x1ey2m1c.x9f619.x78zum5.xdt5ytf.x1iyjqo2.xs83m0k.xtijo5x.x1o0tod.x1qughib.xat24cr.x14z9mp.x1lziwak.xdj266r.x2lwn1j.xeuugli.x18d9i69.xyri2b.x1c1uobl.xexx8yu.x10l6tqk.x13vifvy.x1ja2u2z',
+        '.x1rg5ohu.x5yr21d.xl1xv1r.xh8yej3',
+        '.x1rg5ohu.x1n2onr6.x3ajldb.x1ja2u2z',
+      ],
+      conversation: [
+        '.x78zum5.xdt5ytf.x1iyjqo2.x6ikm8r.x10wlt62 .x9f619.x1ja2u2z.x78zum5.x1n2onr6.x1iyjqo2.xs83m0k.xeuugli.x1qughib.x6s0dn4.x1a02dak.x1q0g3np.xdl72j9 .html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl',
+      ],
+      messages: [
+        '.html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x6ikm8r.x10wlt62',
+        '.x9f619.x1n2onr6.x1ja2u2z.x78zum5.xdt5ytf.x193iq5w.xeuugli.x1r8uery.xs83m0k.x1icxu4v.x10b6aqq.x1yrsyyn.x1iyjqo2.xyiysdx',
+        '.html-h2.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x1vvkbs.x1heor9g.x1qlqyl8.x1pd3egz.x1a2a7pz.x193iq5w.xeuugli',
+      ]
+    },
+    'facebook.com': {
+      avatar: [
+        '.html-div.x1qjc9v5.x1q0q8m5.x1qhh985.x18b5jzi.x10w94by.x1t7ytsu.x14e42zd.x13fuv20.x972fbf.x1ey2m1c.x9f619.x78zum5.xdt5ytf.x1iyjqo2.xs83m0k.xtijo5x.x1o0tod.x1qughib.xat24cr.x14z9mp.x1lziwak.xdj266r.x2lwn1j.xeuugli.x18d9i69.xyri2b.x1c1uobl.xexx8yu.x10l6tqk.x13vifvy.x1ja2u2z',
+        '.x1rg5ohu.x5yr21d.xl1xv1r.xh8yej3',
+        '.x1rg5ohu.x1n2onr6.x3ajldb.x1ja2u2z',
+      ],
+      conversation: [
+        '.x78zum5.xdt5ytf.x1iyjqo2.x6ikm8r.x10wlt62 .x9f619.x1n2onr6.x1ja2u2z.x78zum5.xdt5ytf.x2lah0s.x193iq5w.xeuugli.x1iyjqo2.x1yrsyyn.x1icxu4v.x10b6aqq.x25sj25 .html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl',
+      ],
+      messages: [
+        '.html-div.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x6ikm8r.x10wlt62',
+        '.x9f619.x1n2onr6.x1ja2u2z.x78zum5.xdt5ytf.x193iq5w.xeuugli.x1r8uery.xs83m0k.x1icxu4v.x10b6aqq.x1yrsyyn.x1iyjqo2.xyiysdx',
+        '.html-h2.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x1vvkbs.x1heor9g.x1qlqyl8.x1pd3egz.x1a2a7pz.x193iq5w.xeuugli',
+      ]
+    },
+  };
+
+  return selectors[normalizedHostname] || {
+    avatar: ['[class*="avatar"]', 'img[src*="avatar"]', '[style*="background-image"]'],
+    conversation: ['[class*="chat-list"]', '[class*="conversation"]', '[class*="sidebar"]'],
+    messages: ['[class*="message"]', '[class*="chat"]', '[class*="bubble"]'],
+  };
+}
+
+// Get list of known platforms that have default selectors
+function getKnownPlatforms(): string[] {
+  return [
+    'chat.zalo.me',
+    'web.telegram.org',
+    'messenger.com',
+    'facebook.com',
+  ];
+}
 
 // Initialize default state
 chrome.runtime.onInstalled.addListener(async () => {
   const result = await chrome.storage.sync.get(['rules', 'regions', 'siteSettings', 'globalEnabled']);
   
   // Always ensure default rules exist (merge with existing rules)
-  const defaultRules = getDefaultRules();
-  const existingRules = result.rules || [];
+  // const defaultRules = getDefaultRules();
+  // const existingRules = result.rules || [];
   
-  // Merge default rules with existing rules (don't overwrite user's custom rules)
-  defaultRules.forEach(defaultRule => {
-    const existingRuleIndex = existingRules.findIndex((r: BlurRule) => r.urlPattern === defaultRule.urlPattern);
-    if (existingRuleIndex >= 0) {
-      // Merge selectors if rule exists
-      const existingRule = existingRules[existingRuleIndex];
-      defaultRule.selectors.forEach(selector => {
-        if (!existingRule.selectors.includes(selector)) {
-          existingRule.selectors.push(selector);
-        }
-      });
-      existingRules[existingRuleIndex] = existingRule;
-    } else {
-      // Add new default rule
-      existingRules.push(defaultRule);
-    }
-  });
+  // // Merge default rules with existing rules (don't overwrite user's custom rules)
+  // defaultRules.forEach(defaultRule => {
+  //   const existingRuleIndex = existingRules.findIndex((r: BlurRule) => r.urlPattern === defaultRule.urlPattern);
+  //   if (existingRuleIndex >= 0) {
+  //     // Merge selectors if rule exists
+  //     const existingRule = existingRules[existingRuleIndex];
+  //     defaultRule.selectors.forEach(selector => {
+  //       if (!existingRule.selectors.includes(selector)) {
+  //         existingRule.selectors.push(selector);
+  //       }
+  //     });
+  //     existingRules[existingRuleIndex] = existingRule;
+  //   } else {
+  //     // Add new default rule
+  //     existingRules.push(defaultRule);
+  //   }
+  // });
   
-  await chrome.storage.sync.set({ rules: existingRules });
+  // await chrome.storage.sync.set({ rules: existingRules });
   
   if (!result.regions) {
     await chrome.storage.sync.set({ regions: [] });
   }
   
-  if (!result.siteSettings) {
-    await chrome.storage.sync.set({ siteSettings: {} });
+  // Initialize siteSettings with default selectors for known platforms
+  const siteSettings = result.siteSettings || {};
+  const knownPlatforms = getKnownPlatforms();
+  
+  let hasUpdates = false;
+  knownPlatforms.forEach(platform => {
+    if (!siteSettings[platform]) {
+      // Initialize with default settings and selectors
+      siteSettings[platform] = {
+        ...DEFAULT_SITE_SETTINGS,
+        selectors: getDefaultSelectors(platform),
+      };
+      hasUpdates = true;
+    } else if (!siteSettings[platform].selectors) {
+      // Add selectors if they don't exist
+      siteSettings[platform].selectors = getDefaultSelectors(platform);
+      hasUpdates = true;
+    }
+  });
+  
+  if (hasUpdates || !result.siteSettings) {
+    await chrome.storage.sync.set({ siteSettings });
   }
   
   if (result.globalEnabled === undefined) {
@@ -111,6 +207,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   } else if (message.type === 'UPDATE_SITE_SETTINGS') {
     updateSiteSettings(message.hostname, message.settings).then(() => sendResponse({ success: true }));
+    return true;
+  } else if (message.type === 'UPDATE_BLUR_GROUP') {
+    updateBlurGroup(message.hostname, message.group, message.enabled).then(() => sendResponse({ success: true }));
     return true;
   } else if (message.type === 'TOGGLE_GLOBAL') {
     toggleGlobal(message.enabled).then(() => sendResponse({ success: true }));
@@ -221,10 +320,19 @@ async function getState(): Promise<ExtensionState> {
     rule.selectors.length > 0
   );
   
+  // Ensure siteSettings have default selectors initialized
+  const siteSettings = result.siteSettings || {};
+  Object.keys(siteSettings).forEach(hostname => {
+    const settings = siteSettings[hostname];
+    if (!settings.selectors) {
+      settings.selectors = getDefaultSelectors(hostname);
+    }
+  });
+  
   return {
     rules: rules,
     regions: result.regions || [],
-    siteSettings: result.siteSettings || {},
+    siteSettings: siteSettings,
     globalEnabled: result.globalEnabled !== false,
   };
 }
@@ -278,14 +386,25 @@ async function deleteRegion(regionId: string) {
   }
 }
 
-async function updateSiteSettings(hostname: string, settings: Partial<typeof DEFAULT_SITE_SETTINGS>) {
+async function updateSiteSettings(hostname: string, settings: Partial<SiteSettings>) {
   const result = await chrome.storage.sync.get(['siteSettings']);
   const siteSettings = result.siteSettings || {};
   
-  siteSettings[hostname] = {
+  // Normalize hostname (remove www.)
+  const normalizedHostname = hostname.startsWith('www.') ? hostname.substring(4) : hostname;
+  
+  // Get default selectors if not provided
+  const currentSettings = siteSettings[normalizedHostname] || { ...DEFAULT_SITE_SETTINGS };
+  if (!currentSettings.selectors) {
+    currentSettings.selectors = getDefaultSelectors(normalizedHostname);
+  }
+  
+  siteSettings[normalizedHostname] = {
     ...DEFAULT_SITE_SETTINGS,
-    ...siteSettings[hostname],
+    ...currentSettings,
     ...settings,
+    // Preserve selectors if not being updated
+    selectors: settings.selectors || currentSettings.selectors,
   };
   
   await chrome.storage.sync.set({ siteSettings });
@@ -296,10 +415,50 @@ async function updateSiteSettings(hostname: string, settings: Partial<typeof DEF
     if (tab.id && tab.url) {
       try {
         const url = new URL(tab.url);
-        if (url.hostname === hostname) {
+        const tabHostname = url.hostname.startsWith('www.') ? url.hostname.substring(4) : url.hostname;
+        if (tabHostname === normalizedHostname) {
           chrome.tabs.sendMessage(tab.id, {
             type: 'UPDATE_SETTINGS',
-            ...siteSettings[hostname],
+            ...siteSettings[normalizedHostname],
+          });
+        }
+      } catch {
+        // Invalid URL, skip
+      }
+    }
+  });
+}
+
+async function updateBlurGroup(hostname: string, group: 'blurAvatars' | 'blurConversationList' | 'blurMessages', enabled: boolean) {
+  const result = await chrome.storage.sync.get(['siteSettings']);
+  const siteSettings = result.siteSettings || {};
+  
+  // Normalize hostname (remove www.)
+  const normalizedHostname = hostname.startsWith('www.') ? hostname.substring(4) : hostname;
+  
+  // Get or create settings for this hostname
+  const currentSettings = siteSettings[normalizedHostname] || { ...DEFAULT_SITE_SETTINGS };
+  if (!currentSettings.selectors) {
+    currentSettings.selectors = getDefaultSelectors(normalizedHostname);
+  }
+  
+  // Update the specific blur group
+  currentSettings[group] = enabled;
+  
+  siteSettings[normalizedHostname] = currentSettings;
+  await chrome.storage.sync.set({ siteSettings });
+  
+  // Notify content script
+  const tabs = await chrome.tabs.query({});
+  tabs.forEach(tab => {
+    if (tab.id && tab.url) {
+      try {
+        const url = new URL(tab.url);
+        const tabHostname = url.hostname.startsWith('www.') ? url.hostname.substring(4) : url.hostname;
+        if (tabHostname === normalizedHostname) {
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'UPDATE_SETTINGS',
+            ...siteSettings[normalizedHostname],
           });
         }
       } catch {
@@ -311,7 +470,7 @@ async function updateSiteSettings(hostname: string, settings: Partial<typeof DEF
 
 async function toggleGlobal(enabled: boolean) {
   await chrome.storage.sync.set({ globalEnabled: enabled });
-  notifyContentScripts('UPDATE_SETTINGS', { enabled });
+  notifyContentScripts('UPDATE_GLOBAL_ENABLED', { enabled });
 }
 
 function notifyContentScripts(type: string, data: any) {
@@ -437,4 +596,5 @@ function getDefaultRules(): BlurRule[] {
     }
   ];
 }
+
 

@@ -14,9 +14,18 @@ interface BlurRegion {
   containerSelector?: string;
 }
 
+interface BlurGroupSelectors {
+  avatar: string[];
+  conversation: string[];
+  messages: string[];
+}
+
 interface SiteSettings {
-  enabled: boolean;
   blurIntensity: number;
+  blurAvatars?: boolean;
+  blurConversationList?: boolean;
+  blurMessages?: boolean;
+  selectors?: BlurGroupSelectors;
 }
 
 // Constants (scoped to avoid conflicts with background script)
@@ -63,13 +72,41 @@ class BlurEngine {
         if (this.enabled) {
           this.applyRegionBlur();
         }
+      } else if (message.type === 'UPDATE_GLOBAL_ENABLED') {
+        this.enabled = message.enabled !== false;
+        if (this.enabled) {
+          this.applyBlur();
+        } else {
+          this.removeAllBlur();
+        }
       } else if (message.type === 'UPDATE_SETTINGS') {
         const oldBlurIntensity = this.blurIntensity;
+        const oldEnabled = this.enabled;
+        console.log('Hidey: Updating settings', message);
         this.enabled = message.enabled !== false;
         this.blurIntensity = message.blurIntensity || BLUR_ENGINE_DEFAULT_INTENSITY;
         
+        // Update site settings with blur group settings
+        const hostname = new URL(window.location.href).hostname;
+        const normalizedHostname = hostname.startsWith('www.') ? hostname.substring(4) : hostname;
+        this.siteSettings = {
+          blurIntensity: this.blurIntensity,
+          // Preserve existing blur group settings if not in message
+          blurAvatars: message.blurAvatars !== undefined ? message.blurAvatars : (this.siteSettings?.blurAvatars ?? false),
+          blurConversationList: message.blurConversationList !== undefined ? message.blurConversationList : (this.siteSettings?.blurConversationList ?? false),
+          blurMessages: message.blurMessages !== undefined ? message.blurMessages : (this.siteSettings?.blurMessages ?? false),
+          selectors: message.selectors || this.siteSettings?.selectors,
+        };
+        
+        // If global enabled state changed to false, remove all blur immediately
+        if (oldEnabled && !this.enabled) {
+          console.log('Hidey: Removing all blur');
+          this.removeAllBlur();
+          return;
+        }
+        
         // If blur intensity changed, update all blurred elements and restore hover state
-        if (oldBlurIntensity !== this.blurIntensity) {
+        if (oldBlurIntensity !== this.blurIntensity && this.enabled) {
           document.querySelectorAll('[data-hidey-blur]').forEach(el => { 
             const element = el as HTMLElement;
             const isHovering = element.hasAttribute('data-hidey-hovering');
@@ -79,13 +116,22 @@ class BlurEngine {
           });
         }
         
-        this.applyBlur();
+        // Only apply blur if enabled
+        if (this.enabled) {
+          this.applyBlur();
+        } else {
+          this.removeAllBlur();
+        }
       } else if (message.type === 'TOGGLE_BLUR') {
         // This is for local toggle (deprecated, use UPDATE_SETTINGS instead)
         this.enabled = !this.enabled;
         // Upload (persist) the current globalEnabled state to chrome.storage.sync
         chrome.storage.sync.set({ globalEnabled: this.enabled });
-        this.applyBlur();
+        if (this.enabled) {
+          this.applyBlur();
+        } else {
+          this.removeAllBlur();
+        }
       }
       return true;
     });
@@ -93,7 +139,11 @@ class BlurEngine {
     // Listen for custom events from floating button
     window.addEventListener('hidey-toggle-blur', () => {
       this.enabled = !this.enabled;
-      this.applyBlur();
+      if (this.enabled) {
+        this.applyBlur();
+      } else {
+        this.removeAllBlur();
+      }
     });
     
     // Listen for clear blur mode events
@@ -130,9 +180,10 @@ class BlurEngine {
         this.urlMatchesPattern(currentUrl, region.urlPattern)
       );
       
-      // Get site settings
+      // Get site settings (normalize hostname to handle www/non-www)
       const hostname = new URL(currentUrl).hostname;
-      this.siteSettings = result.siteSettings?.[hostname] || null;
+      const normalizedHostname = hostname.startsWith('www.') ? hostname.substring(4) : hostname;
+      this.siteSettings = result.siteSettings?.[normalizedHostname] || null;
       this.enabled = result.globalEnabled !== false;
       this.blurIntensity = this.siteSettings?.blurIntensity || BLUR_ENGINE_DEFAULT_INTENSITY;
     } catch (error) {
@@ -216,10 +267,14 @@ class BlurEngine {
       }
       
       this.debounceTimer = window.setTimeout(() => {
-        // Only reapply selector blur on DOM changes, not regions
+        // Only reapply blur on DOM changes, not regions
         // Regions are position-based and don't need to be recreated
         if (this.enabled) {
+          this.applyGroupBasedBlur();
           this.applySelectorBlur();
+        } else {
+          // Remove all blur if disabled
+          this.removeAllBlur();
         }
       }, 100); // Increased debounce time for better performance
     });
@@ -280,14 +335,79 @@ class BlurEngine {
       return;
     }
 
-    // Apply selector-based blur
+    // Apply group-based blur (new system)
+    this.applyGroupBasedBlur();
+    
+    // Apply selector-based blur (legacy system)
     this.applySelectorBlur();
     
     // Apply region-based blur (only if regions changed, otherwise positions are updated separately)
     this.applyRegionBlur();
   }
 
+  private applyGroupBasedBlur() {
+    console.log('Hidey: Applying group-based blur', this.siteSettings);
+    if (!this.siteSettings || !this.siteSettings.selectors) {
+      return;
+    }
+
+    const { blurAvatars, blurConversationList, blurMessages, selectors } = this.siteSettings;
+    console.log('Hidey: Applying group-based blur', blurAvatars, blurConversationList, blurMessages, selectors);
+    // Apply blur to avatars if enabled
+    if (blurAvatars && selectors.avatar && selectors.avatar.length > 0) {
+      selectors.avatar.forEach(selector => {
+        try {
+          const elements = document.querySelectorAll(selector);
+          this.applyBlurInBatches(Array.from(elements) as HTMLElement[], 'group-avatar');
+        } catch (err) {
+          console.warn(`Hidey: Invalid avatar selector "${selector}"`, err);
+        }
+      });
+    } else {
+      console.log('Hidey: Removing group-avatar blur');
+      // Remove blur from avatars if disabled
+      this.removeGroupBlur('group-avatar');
+    }
+
+    // Apply blur to conversation list if enabled
+    if (blurConversationList && selectors.conversation && selectors.conversation.length > 0) {
+      selectors.conversation.forEach(selector => {
+        try {
+          const elements = document.querySelectorAll(selector);
+          this.applyBlurInBatches(Array.from(elements) as HTMLElement[], 'group-conversation');
+        } catch (err) {
+          console.warn(`Hidey: Invalid conversation selector "${selector}"`, err);
+        }
+      });
+    } else {
+      console.log('Hidey: Removing group-conversation blur');
+      // Remove blur from conversation list if disabled
+      this.removeGroupBlur('group-conversation');
+    }
+
+    // Apply blur to messages if enabled
+    if (blurMessages && selectors.messages && selectors.messages.length > 0) {
+      selectors.messages.forEach(selector => {
+        try {
+          const elements = document.querySelectorAll(selector);
+          this.applyBlurInBatches(Array.from(elements) as HTMLElement[], 'group-messages');
+        } catch (err) {
+          console.warn(`Hidey: Invalid messages selector "${selector}"`, err);
+        }
+      });
+    } else {
+      console.log('Hidey: Removing group-messages blur');
+        // Remove blur from messages if disabled
+      this.removeGroupBlur('group-messages');
+    }
+  }
+
   private applySelectorBlur() {
+    // Don't apply blur if global toggle is off
+    if (!this.enabled) {
+      return;
+    }
+
     // Track elements that should be blurred
     const elementsToBlur = new Set<HTMLElement>();
     const currentUrl = window.location.href
@@ -307,7 +427,7 @@ class BlurEngine {
 
   }
 
-  private applyBlurInBatches(elements: HTMLElement[]) {
+  private applyBlurInBatches(elements: HTMLElement[], groupType?: string) {
     const batchSize = 50; // Process 50 elements per frame
     let index = 0;
 
@@ -315,7 +435,7 @@ class BlurEngine {
       const end = Math.min(index + batchSize, elements.length);
       
       for (let i = index; i < end; i++) {
-        this.applyBlurToElement(elements[i]);
+        this.applyBlurToElement(elements[i], groupType);
       }
       
       index = end;
@@ -330,13 +450,14 @@ class BlurEngine {
     }
   }
 
-  private applyBlurToElement(element: HTMLElement) {
+  private applyBlurToElement(element: HTMLElement, groupType?: string) {
     const isAlreadyBlurred = element.hasAttribute('data-hidey-blur');
     const isHovering = element.hasAttribute('data-hidey-hovering');
     
     if (!isAlreadyBlurred && !isHovering) {
       // First time applying blur
-      element.setAttribute('data-hidey-blur', 'selector');
+      const blurType = groupType || 'selector';
+      element.setAttribute('data-hidey-blur', blurType);
       element.classList.add('hidey-blurred');
       
       // Apply blur style immediately
@@ -351,6 +472,25 @@ class BlurEngine {
     if (!(element as any).__hideyHoverListeners) {
       this.setupHoverToUnblur(element);
     }
+  }
+
+  private removeGroupBlur(groupType: string) {
+    console.log('Hidey: Removing group blur', groupType);
+    document.querySelectorAll(`[data-hidey-blur="${groupType}"]`).forEach(el => {
+      const element = el as HTMLElement;
+      element.removeAttribute('data-hidey-blur');
+      element.classList.remove('hidey-blurred');
+      element.style.removeProperty('filter');
+      element.style.removeProperty('transition');
+      
+      // Remove hover listeners if they exist
+      if ((element as any).__hideyHoverListeners) {
+        const { enterHandler, leaveHandler } = (element as any).__hideyHoverListeners;
+        element.removeEventListener('mouseenter', enterHandler);
+        element.removeEventListener('mouseleave', leaveHandler);
+        delete (element as any).__hideyHoverListeners;
+      }
+    });
   }
 
   private setupHoverToUnblur(element: HTMLElement) {
@@ -504,14 +644,24 @@ class BlurEngine {
   }
 
   private removeAllBlur() {
+    // Remove all blurred elements (including group-based blur)
     document.querySelectorAll('[data-hidey-blur]').forEach(el => {
       const element = el as HTMLElement;
       element.removeAttribute('data-hidey-blur');
       element.classList.remove('hidey-blurred');
-      element.style.filter = '';
+      element.style.removeProperty('filter');
+      element.style.removeProperty('transition');
+      
+      // Remove hover listeners if they exist
+      if ((element as any).__hideyHoverListeners) {
+        const { enterHandler, leaveHandler } = (element as any).__hideyHoverListeners;
+        element.removeEventListener('mouseenter', enterHandler);
+        element.removeEventListener('mouseleave', leaveHandler);
+        delete (element as any).__hideyHoverListeners;
+      }
     });
 
-      // Collect all elements that match rules
+    // Remove blur from selector-based rules
     this.currentRules.forEach(rule => {
       rule.selectors.forEach(selector => {
         try {
@@ -525,6 +675,7 @@ class BlurEngine {
       });
     });
     
+    // Remove region overlays
     document.querySelectorAll('.hidey-region-overlay').forEach(el => el.remove());
   }
 

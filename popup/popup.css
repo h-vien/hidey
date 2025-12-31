@@ -98,6 +98,30 @@ input:checked + .slider:before {
   transform: translateX(22px);
 }
 
+input:disabled + .slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #333;
+}
+
+input:disabled + .slider:before {
+  background-color: #999;
+}
+
+/* Notice Section */
+.notice-section {
+  padding: 12px 20px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #404040;
+}
+
+.notice-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #e0e0e0;
+  margin: 0;
+}
+
 /* Sections */
 .section {
   padding: 20px;
@@ -138,7 +162,8 @@ h2 {
 .settings-grid {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  margin-top: 12px;
+  gap: 4px;
 }
 
 .setting-item {
@@ -160,6 +185,34 @@ h2 {
   font-size: 13px;
   font-weight: 600;
   color: #e0e0e0;
+}
+
+.blur-group-item {
+  padding: 0;
+}
+
+.blur-group-label {
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.blur-group-label .toggle-switch {
+  margin: 0;
+  width: 38px;
+  height: 22px;
+}
+
+.blur-group-label .toggle-switch .slider {
+  border-radius: 22px;
+}
+
+.blur-group-label .toggle-switch .slider:before {
+  height: 16px;
+  width: 16px;
+}
+
+.blur-group-label .toggle-switch input:checked + .slider:before {
+  transform: translateX(16px);
 }
 
 .range-input {

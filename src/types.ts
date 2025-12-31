@@ -13,9 +13,18 @@ export interface BlurRegion {
   containerSelector?: string;
 }
 
+export interface BlurGroupSelectors {
+  avatar: string[];
+  conversation: string[];
+  messages: string[];
+}
+
 export interface SiteSettings {
-  enabled: boolean;
   blurIntensity: number;
+  blurAvatars?: boolean;
+  blurConversationList?: boolean;
+  blurMessages?: boolean;
+  selectors?: BlurGroupSelectors;
 }
 
 export interface ExtensionState {
@@ -27,7 +36,6 @@ export interface ExtensionState {
 
 export const DEFAULT_BLUR_INTENSITY = 8;
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
-  enabled: true,
   blurIntensity: DEFAULT_BLUR_INTENSITY,
 };
 
