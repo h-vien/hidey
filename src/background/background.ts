@@ -89,6 +89,18 @@ function getDefaultSelectors(hostname: string): BlurGroupSelectors {
         '.html-h2.xdj266r.x14z9mp.xat24cr.x1lziwak.xexx8yu.xyri2b.x18d9i69.x1c1uobl.x1vvkbs.x1heor9g.x1qlqyl8.x1pd3egz.x1a2a7pz.x193iq5w.xeuugli',
       ]
     },
+    'web.whatsapp.com': { 
+      avatar: [
+        '.x1n2onr6.x1c9tyrk.xeusxvb.x1pahc9y.x1ertn4p',
+      ],
+      conversation: [
+        '._ak8l._ap1_'
+      ],
+      messages: [
+        '.x9f619.x1hx0egp.x1yrsyyn.xizg8k.xu9hqtb.xwib8y2',
+        '.x78zum5.xdt5ytf.x1iyjqo2.xl56j7k.xeuugli.xtnn1bt.x9v5kkp.xmw7ebm.xrdum7p',
+      ],
+    }
   };
 
   return selectors[normalizedHostname] || {
