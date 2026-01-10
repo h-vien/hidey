@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Hidey - Auto Blur Messages",
-  "version": "1.0.7",
-  "description": "Protect your privacy by automatically blurring sensitive chat messages",
+  "name": "Hidey – Tự động làm mờ tin nhắn Zalo, Telegram, Messenger, Whatsapp để bảo mật quyền riêng tư",
+  "version": "1.0.8",
+  "description": "Hidey là tiện ích Chrome giúp tự động làm mờ tin nhắn nhạy cảm trên Zalo Web, Telegram Web, Messenger, Whatsapp và các nền tảng chat phổ biến khác, giúp bạn bảo mật nội dung trò chuyện khi làm việc, chia sẻ màn hình hoặc sử dụng máy tính nơi công cộng.", 
   "permissions": [
     "storage",
     "activeTab",
